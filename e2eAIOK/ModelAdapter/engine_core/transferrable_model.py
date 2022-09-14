@@ -129,7 +129,7 @@ class TransferrableModel(nn.Module):
         if self.distiller.pretrained_model_type is not None and self.distiller.pretrained_model_type.startswith("huggingface") and isinstance(x_input, dict):
             backbone_outputs = self.backbone(**x_input)
             # backbone_output = backbone_outputs.logits
-            backbone_output = backbone_outputs.hidden_states[-1]
+            backbone_output = backbone_outputs.hidden_states
             self.distiller.backbone_loss = backbone_outputs.loss
         else:
             backbone_output = self.backbone(x_input)

@@ -53,7 +53,7 @@ class BasicDistiller(nn.Module):
                     output = self.pretrained_model(**x)
                 else:
                     output = self.pretrained_model(x)
-                output = output.hidden_states[-1]
+                output = output.hidden_states
                 # output = output.logits
             else:
                 output = self.pretrained_model(x)

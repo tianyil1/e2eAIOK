@@ -1,7 +1,11 @@
+import sys
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .basic_distiller import BasicDistiller
+
+#key_map = {1:1, 2:3, 3:5, 4:7, 5:9, 6:12}
+key_map = {1:1, 2:3, 3:5, 4:7, 5:9, 6:10, 7:11, 8:12}
 
 class KD(BasicDistiller):
     ''' KD Distiller
@@ -22,8 +26,13 @@ class KD(BasicDistiller):
         self.temperature = temperature
 
     def kd_loss(self, logits_student, logits_teacher, temperature):
-        log_pred_student = F.log_softmax(logits_student / temperature, dim=1)
-        pred_teacher = F.softmax(logits_teacher / temperature, dim=1)
+        logits_student_stack = logits_student[-1]
+        logits_teacher_stack = logits_teacher[-1]
+        for i in range(len(key_map)-1):
+            logits_student_stack = torch.cat((logits_student[i+1], logits_student_stack), 0)
+            logits_teacher_stack = torch.cat((logits_teacher[key_map[i+1]], logits_teacher_stack), 0)
+        log_pred_student = F.log_softmax(logits_student_stack / temperature, dim=1)
+        pred_teacher = F.softmax(logits_teacher_stack / temperature, dim=1)
         loss_kd = F.kl_div(log_pred_student, pred_teacher, reduction="none").sum(1).mean()
         loss_kd *= temperature**2
         return loss_kd

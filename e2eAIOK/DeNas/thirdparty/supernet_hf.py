@@ -185,7 +185,6 @@ class SuperHFModelForCausalLM(AutoModelForCausalLM):
                     k_super = layer_dict[k]
                 else:
                     k_super = k
-                print(k, k_super)
                 super_hf_state = super_hf_state_dict[k_super]
                 candidate_hf_state = super_hf_state
                 for dim, size in enumerate(candidate_hf_state_dict[k].size()):
