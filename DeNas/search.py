@@ -12,7 +12,7 @@ from nlp.utils import generate_search_space
 from asr.supernet_asr import TransformerASRSuper
 from search.SearchEngineFactory import SearchEngineFactory
 from search.utils import Timer, parse_config
-
+from transformers import GPT2PreTrainedModel, GPT2Model, GPT2Config
 def parse_args(args):
     parser = argparse.ArgumentParser('DE-NAS')
     parser.add_argument('--domain', type=str, default=None, choices=['cnn', 'vit', 'bert', 'asr'], help='DE-NAS search domain')
@@ -51,8 +51,10 @@ def main(params):
             cfg = edict(yaml.safe_load(f))
             params.cfg = cfg
         config = BertConfig.from_json_file(params.pretrained_bert_config)
-        super_net = SuperBertModel.from_pretrained(params.pretrained_bert, config)
+        super_net = SuperBertModel.from_pretrained(params.pretrained_bert,params.model_name,config)
         search_space = generate_search_space(cfg["SEARCH_SPACE"])
+    # elif params.domain =='gpt':
+
     elif params.domain == 'asr':
         with open(params.supernet_cfg) as f:
             cfg = edict(yaml.safe_load(f))
