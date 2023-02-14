@@ -23,6 +23,8 @@ class BERTTrainer(TorchTrainer):
         self.best_acc = -1
         self.is_stop = False
 
+        self.output_file = open(os.path.join(self.cfg.output_dir, "nlp_step_metric_{}.txt".format(int(time.time()))), "w+")
+
     def _pre_process(self):
         """
             trainer pre process to prepare trainer environment
@@ -77,6 +79,7 @@ class BERTTrainer(TorchTrainer):
                              "best_acc = {}\n".format(self.best_acc) + \
                              "**************E*************\n"
         self.logger.info(output_str)
+        self.output_file.close()
 
     def train_one_epoch(self, epoch):
         # set random seed
@@ -116,6 +119,8 @@ class BERTTrainer(TorchTrainer):
         self.logger.info("***** Running evaluation *****")
         self.logger.info("  Epoch = {} iter {} step".format(epoch, self.global_step))
         result = self.metric(self.cfg, self.model, self.eval_dataloader, self.other_data)
+        self.output_file.write("iter:{}\tf1:{}\n".format(self.global_step, result["qa_f1"]))
+        self.output_file.flush()
         print("***** Eval results *****")
         for key in sorted(result.keys()):
             print("{} = {}".format(key, str(result[key])))
