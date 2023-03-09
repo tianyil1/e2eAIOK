@@ -15,11 +15,13 @@ from e2eAIOK.DeNas.thirdparty.supernet_hf import SuperHFModel
 
 LINEAR_LAYER_STRUCTURE = {"output": linear.Linear,
                             "intermediate": linear.Linear,
-                            "mlp": pytorch_utils.Conv1D
+                            "mlp": pytorch_utils.Conv1D,
+                            "ml": linear.Linear
                         }
 
 ATTN_LAYER_STRUCTURE = {"selfatt": linear.Linear,
-                            "att": pytorch_utils.Conv1D
+                            "att": pytorch_utils.Conv1D,
+                            "atten": linear.Linear
                         }
 
 def decode_arch(arches_file):
