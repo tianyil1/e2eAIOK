@@ -7,6 +7,7 @@ import collections
 import torch
 from torch.utils.data import TensorDataset
 
+from transformers import AutoTokenizer
 from e2eAIOK.DeNas.module.nlp.tokenization import BertTokenizer, whitespace_tokenize
 from e2eAIOK.common.trainer.data.data_builder_nlp import DataBuilderNLP, DataProcessor, InputExample
 import e2eAIOK.common.trainer.utils.extend_distributed as ext_dist
@@ -443,7 +444,7 @@ def build_dataset(is_train, args):
     }
 
     model_dir = args.model_dir
-    if args.data_set == "SQuADv1.1":
+    if args.task_name == "squad1":
         task_name = "squad1"
         data_dir = args.data_dir
         
@@ -455,7 +456,10 @@ def build_dataset(is_train, args):
     label_list = processor.get_labels()
     num_labels = len(label_list)
 
-    tokenizer = BertTokenizer.from_pretrained(model_dir, do_lower_case=args.do_lower_case)
+    if 'tokenizer' not in args:
+        tokenizer = BertTokenizer.from_pretrained(model_dir, do_lower_case=args.do_lower_case)
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(args.tokenizer, do_lower_case=args.do_lower_case)
 
     def get_data(examples, label_list, max_seq_length, tokenizer, output_mode,
                    is_dev=False, is_training=False):
