@@ -22,6 +22,7 @@ class BasicDistiller(nn.Module):
         self.topk = topk
         self.num_classes = num_classes
         self.pretrained_model_type = teacher_type
+        self.backbone_loss = None
         
         if self.is_frozen:
             for param in self.pretrained_model.parameters():
@@ -47,8 +48,15 @@ class BasicDistiller(nn.Module):
         :param x: the input
         '''
         if not self.use_saved_logits:
-            output = self.pretrained_model(x)
-            output = output.logits if self.pretrained_model_type is not None and self.pretrained_model_type.startswith("huggingface") else output
+            if self.pretrained_model_type is not None and self.pretrained_model_type.startswith("huggingface"):
+                if isinstance(x, dict):
+                    output = self.pretrained_model(**x)
+                else:
+                    output = self.pretrained_model(x)
+                output = output.hidden_states[-1]
+                # output = output.logits
+            else:
+                output = self.pretrained_model(x)
             return output
         else:
             if not isinstance(x, list) or len(x)!=2:

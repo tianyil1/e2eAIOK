@@ -126,7 +126,13 @@ class TransferrableModel(nn.Module):
         :return: TransferrableModelOutput
         '''
         x_input = x[0] if self.distiller.use_saved_logits else x
-        backbone_output = self.backbone(x_input)
+        if self.distiller.pretrained_model_type is not None and self.distiller.pretrained_model_type.startswith("huggingface") and isinstance(x_input, dict):
+            backbone_outputs = self.backbone(**x_input)
+            # backbone_output = backbone_outputs.logits
+            backbone_output = backbone_outputs.hidden_states[-1]
+            self.distiller.backbone_loss = backbone_outputs.loss
+        else:
+            backbone_output = self.backbone(x_input)
         distiller_output = self.distiller(x)
         return TransferrableModelOutput(backbone_output, distiller_output,None)
 
@@ -138,10 +144,13 @@ class TransferrableModel(nn.Module):
         :param student_label: student label
         :return: TransferrableModelLoss
         '''
-        if self.enable_target_training_label:
-            student_loss = self.backbone.loss(student_output, student_label)
+        if self.distiller.backbone_loss is None:
+            if self.enable_target_training_label:
+                student_loss = self.backbone.loss(student_output, student_label)
+            else:
+                student_loss = 0.0
         else:
-            student_loss = 0.0
+            student_loss = self.distiller.backbone_loss
         
         distiller_loss = self.distiller.loss(teacher_output, student_output, target=student_label)
 
@@ -235,7 +244,7 @@ class TransferrableModel(nn.Module):
         if self.transfer_strategy == TransferStrategy.OnlyFinetuneStrategy:
             return self._finetune_loss(output.backbone_output,label if isinstance(label, torch.Tensor) else label[0])
         elif self.transfer_strategy == TransferStrategy.OnlyDistillationStrategy:
-            label = label if isinstance(label, torch.Tensor) else label[0]
+            # label = label if isinstance(label, torch.Tensor) else label[0]
             return self._distillation_loss(output.backbone_output,output.distiller_output,label)
         elif self.transfer_strategy == TransferStrategy.OnlyDomainAdaptionStrategy or \
             self.transfer_strategy == TransferStrategy.FinetuneAndDomainAdaptionStrategy:
@@ -309,11 +318,12 @@ def _make_transferrable(model, loss,
     :return: a TransferrableModel
     '''
     ######## check input #####
-    if not hasattr(model,"loss"):
-        if loss is None:
-            raise RuntimeError("Need loss for model")
-        else:
-            setattr(model,'loss',loss)
+    if loss is not None:
+        if not hasattr(model,"loss"):
+            if loss is None:
+                raise RuntimeError("Need loss for model")
+            else:
+                setattr(model,'loss',loss)
     if transfer_strategy in [TransferStrategy.OnlyDistillationStrategy,
                              TransferStrategy.DistillationAndDomainAdaptionStrategy]:
         if distiller is None:
