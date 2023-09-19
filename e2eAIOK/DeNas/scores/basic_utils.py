@@ -37,8 +37,6 @@ def get_layer_metric_array(net, metric, mode):
 
     return metric_array
 
-
-
 def compute_synflow_per_weight(model_type, net, inputs, mode):
     device = inputs.device
 
@@ -132,5 +130,3 @@ def get_ntk_n(networks, recalbn=0, train_mode=False, num_batch=None,
         eigenvalues, _ = torch.symeig(ntk)  # ascending
         conds.append(np.nan_to_num((eigenvalues[-1] / eigenvalues[0]).item(), copy=True))
     return conds
-
-

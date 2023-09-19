@@ -1,14 +1,13 @@
-from e2eAIOK.DeNas.search.BaseSearchEngine import BaseSearchEngine
-from e2eAIOK.DeNas.cv.utils.cnn import cnn_mutation_random_func, cnn_crossover_random_func
-from e2eAIOK.DeNas.cv.utils.vit import vit_mutation_random_func, vit_crossover_random_func
-from e2eAIOK.DeNas.nlp.utils import bert_mutation_random_func, bert_crossover_random_func
-from e2eAIOK.DeNas.asr.utils.asr_nas import asr_mutation_random_func, asr_crossover_random_func
-from e2eAIOK.DeNas.thirdparty.utils import hf_mutation_random_func, hf_crossover_random_func
+import os
+import sys
+import traceback
+from .BaseSearchEngine import BaseSearchEngine
+from .utils import mutation_random_func, crossover_random_func
 
 class EvolutionarySearchEngine(BaseSearchEngine):
 
-    def __init__(self, params=None, super_net=None, search_space=None):
-        super().__init__(params,super_net,search_space)
+    def __init__(self, params=None, super_net=None, search_space=None,peft_type=None):
+        super().__init__(params,super_net,search_space,peft_type)
         self.candidates = []
         self.top_candidates = []
         self.vis_dict = {}
@@ -29,35 +28,13 @@ class EvolutionarySearchEngine(BaseSearchEngine):
     EA mutation function for random structure
     '''
     def mutation_random_func(self):
-        if self.params.domain == "vit":
-            return vit_mutation_random_func(self.params.m_prob, self.params.s_prob, self.search_space, self.top_candidates)
-        elif self.params.domain == "bert":
-            return bert_mutation_random_func(self.params.m_prob, self.params.s_prob, self.search_space, self.top_candidates)
-        elif self.params.domain == "asr":
-            return asr_mutation_random_func(self.params.m_prob, self.params.s_prob, self.search_space, self.top_candidates)
-        elif self.params.domain == "cnn":
-            return cnn_mutation_random_func(self.candidates, self.super_net, self.search_space, self.params.num_classes, self.params.plainnet_struct)
-        elif self.params.domain == "hf":
-            return hf_mutation_random_func(self.params.m_prob, self.params.s_prob, self.search_space, self.top_candidates)
-        else:
-            raise RuntimeError(f"Domain {self.params.domain} is not supported")
+        return mutation_random_func(self.params.m_prob, self.params.s_prob, self.search_space, self.super_net, self.params, self.top_candidates, self.params.search_space_name)
 
     '''
     EA crossover function for random structure
     '''
     def crossover_random_func(self):
-        if self.params.domain == "vit":
-            return vit_crossover_random_func(self.top_candidates)
-        elif self.params.domain == "bert":
-            return bert_crossover_random_func(self.top_candidates)
-        elif self.params.domain == "asr":
-            return asr_crossover_random_func(self.top_candidates)
-        elif self.params.domain == "cnn":
-            return cnn_crossover_random_func(self.super_net, self.search_space, self.params.num_classes, self.params.plainnet_struct, self.params.no_reslink, self.params.no_BN, self.params.use_se)
-        elif self.params.domain == "hf":
-            return hf_crossover_random_func(self.top_candidates)
-        else:
-            raise RuntimeError(f"Domain {self.params.domain} is not supported")
+        return crossover_random_func(self.top_candidates, self.params, self.super_net, self.params.search_space_name)
 
     '''
     Supernet decoupled EA populate process
@@ -139,9 +116,9 @@ class EvolutionarySearchEngine(BaseSearchEngine):
             mutation = self.get_mutation()
             crossover = self.get_crossover()
             self.candidates = mutation + crossover
+            
         self.update_population_pool()
-        with open("best_model_structure.txt", 'w') as f:
-            f.write(str(self.top_candidates[0]))
+        return str(self.top_candidates[0])
 
     '''
     Unified API to get best searched structure

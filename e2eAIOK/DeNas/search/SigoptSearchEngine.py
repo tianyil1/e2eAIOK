@@ -1,13 +1,14 @@
+import os
 import time
 import json
 import sigopt
 
-from e2eAIOK.DeNas.search.BaseSearchEngine import BaseSearchEngine
-from e2eAIOK.common.utils import timeout_input
+from .BaseSearchEngine import BaseSearchEngine
+from .utils import timeout_input
 
 class SigoptSearchEngine(BaseSearchEngine):
-    def __init__(self, params=None, super_net=None, search_space=None):
-        super().__init__(params,super_net,search_space)
+    def __init__(self, params=None, super_net=None, search_space=None,peft_type=None):
+        super().__init__(params,super_net,search_space,peft_type)
         self.conn = None
         self.vis_dict = {}
         self.best_struct = ()
@@ -82,222 +83,44 @@ class SigoptSearchEngine(BaseSearchEngine):
     '''
     def search(self):
         self.conn = sigopt.Connection()
-        if self.params.domain == "bert":
-            experiment = self.conn.experiments().create(
-                name= 'bert denas',
-                project='denas',
-                type="offline",
-                observation_budget=self.params.sigopt_max_epochs,
-                metrics=[dict(name='DeScore', objective='maximize')],
-                parameters=[
-                    dict(name="LAYER_NUM", type="int", bounds=dict(min=self.params.cfg["SEARCH_SPACE"]['LAYER_NUM']['bounds']['min'], max=self.params.cfg["SEARCH_SPACE"]['LAYER_NUM']['bounds']['max'])),
-                    dict(name="HEAD_NUM", type="int", bounds=dict(min=self.params.cfg["SEARCH_SPACE"]['HEAD_NUM']['bounds']['min'], max=self.params.cfg["SEARCH_SPACE"]['HEAD_NUM']['bounds']['max']-1)),
-                    dict(name="HIDDEN_SIZE", type="int", bounds=dict(min=self.params.cfg["SEARCH_SPACE"]['HIDDEN_SIZE']['bounds']['min']/self.params.cfg["SEARCH_SPACE"]['HIDDEN_SIZE']['bounds']['step'], max=self.params.cfg["SEARCH_SPACE"]['HIDDEN_SIZE']['bounds']['max']/self.params.cfg["SEARCH_SPACE"]['HIDDEN_SIZE']['bounds']['step']-1)),
-                    dict(name="INTERMEDIATE_SIZE", type="int", bounds=dict(min=self.params.cfg["SEARCH_SPACE"]['INTERMEDIATE_SIZE']['bounds']['min']/self.params.cfg["SEARCH_SPACE"]['INTERMEDIATE_SIZE']['bounds']['step'], max=self.params.cfg["SEARCH_SPACE"]['INTERMEDIATE_SIZE']['bounds']['max']/self.params.cfg["SEARCH_SPACE"]['INTERMEDIATE_SIZE']['bounds']['step']-1)),
-                ],
-            )
-            for epoch in range(experiment.observation_budget):
-                suggestion = self._get_sigopt_suggestion(experiment)
-                cand = (
-                    suggestion.assignments['LAYER_NUM'], 
-                    suggestion.assignments['HEAD_NUM'], 
-                    64*suggestion.assignments['HEAD_NUM'], 
-                    suggestion.assignments['HIDDEN_SIZE']*self.params.cfg["SEARCH_SPACE"]['HIDDEN_SIZE']['bounds']['step'], 
-                    suggestion.assignments['INTERMEDIATE_SIZE']*self.params.cfg["SEARCH_SPACE"]['INTERMEDIATE_SIZE']['bounds']['step'],
-                )
-                if not self.cand_islegal(cand):
-                    self._set_illegal_observation(experiment, suggestion.id)
-                    continue
-                if not self.cand_islegal_latency(cand):
-                    self._set_illegal_observation(experiment, suggestion.id)
-                    continue
-                nas_score, score, latency = self.cand_evaluate(cand)
-                self.logger.info('epoch = {} structure = {} nas_score = {} params = {}'.format(epoch, cand, self.vis_dict[cand]['score'], self.vis_dict[cand]['params']))
-                self._set_sigopt_observation(experiment, suggestion.id, nas_score)
-            best_assignments = self.conn.experiments(experiment.id).best_assignments().fetch().data[0].assignments
-            self.best_struct = (best_assignments['LAYER_NUM'],best_assignments['HEAD_NUM'],64*best_assignments['HEAD_NUM'],best_assignments['HIDDEN_SIZE']*self.params.cfg["SEARCH_SPACE"]['HIDDEN_SIZE']['bounds']['step'],best_assignments['INTERMEDIATE_SIZE']*self.params.cfg["SEARCH_SPACE"]['INTERMEDIATE_SIZE']['bounds']['step'])
-        elif self.params.domain == "vit":
-            experiment = self.conn.experiments().create(
-                name= 'vit denas',
-                project='denas',
-                type="offline",
-                observation_budget=self.params.sigopt_max_epochs,
-                metrics=[dict(name='DeScore', objective='maximize')],
-                conditionals=[dict(name="DEPTH",values=["12","13","14","15","16"])],
-                parameters=[
-                    dict(name="MLP_RATIO_0", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_1", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_2", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_3", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_4", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_5", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_6", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_7", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_8", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_9", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_10", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_11", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_12", type="double", grid=[*self.search_space['mlp_ratio']], conditions=dict(DEPTH=["16","15","14","13"])),
-                    dict(name="MLP_RATIO_13", type="double", grid=[*self.search_space['mlp_ratio']], conditions=dict(DEPTH=["16","15","14"])),
-                    dict(name="MLP_RATIO_14", type="double", grid=[*self.search_space['mlp_ratio']], conditions=dict(DEPTH=["16","15"])),
-                    dict(name="MLP_RATIO_15", type="double", grid=[*self.search_space['mlp_ratio']], conditions=dict(DEPTH=["16"])),
-                    dict(name="NUM_HEADS_0", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_1", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_2", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_3", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_4", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_5", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_6", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_7", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_8", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_9", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_10", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_11", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_12", type="int", grid=[*self.search_space['num_heads']], conditions=dict(DEPTH=["16","15","14","13"])),
-                    dict(name="NUM_HEADS_13", type="int", grid=[*self.search_space['num_heads']], conditions=dict(DEPTH=["16","15","14"])),
-                    dict(name="NUM_HEADS_14", type="int", grid=[*self.search_space['num_heads']], conditions=dict(DEPTH=["16","15"])),
-                    dict(name="NUM_HEADS_15", type="int", grid=[*self.search_space['num_heads']], conditions=dict(DEPTH=["16"])),
-                    dict(name="EMBED_DIM", type="int", grid=[*self.search_space['embed_dim']]),
-                ],
-            )
-            for epoch in range(experiment.observation_budget):
-                suggestion = self._get_sigopt_suggestion(experiment)
-                cand_tuple = list()
-                depth = int(suggestion.assignments['DEPTH'])
-                cand_tuple.append(depth)
-                for i in range(depth):
-                    mlp_ratio_name = f"MLP_RATIO_{i}"
-                    cand_tuple.append(float(suggestion.assignments[mlp_ratio_name]))
-                for i in range(depth):
-                    num_heads_name = f"NUM_HEADS_{i}"
-                    cand_tuple.append(int(suggestion.assignments[num_heads_name]))
-                cand_tuple.append(int(suggestion.assignments['EMBED_DIM']))
-                cand = tuple(cand_tuple)
-                if not self.cand_islegal(cand):
-                    self._set_illegal_observation(experiment, suggestion.id)
-                    continue
-                if not self.cand_islegal_latency(cand):
-                    self._set_illegal_observation(experiment, suggestion.id)
-                    continue
-                nas_score, score, latency = self.cand_evaluate(cand)
-                self.logger.info('epoch = {} structure = {} nas_score = {} params = {}'.format(epoch, cand, self.vis_dict[cand]['score'], self.vis_dict[cand]['params']))
-                self._set_sigopt_observation(experiment, suggestion.id, nas_score)
-            best_assignments = self.conn.experiments(experiment.id).best_assignments().fetch().data[0].assignments  
-            depth = int(best_assignments['DEPTH'])
-            best_struct_tuple = list()
-            best_struct_tuple.append(depth)
-            for i in range(depth):
-                mlp_ratio_name = f"MLP_RATIO_{i}"
-                best_struct_tuple.append(float(best_assignments[mlp_ratio_name]))
-            for i in range(depth):
-                num_heads_name = f"NUM_HEADS_{i}"
-                best_struct_tuple.append(int(best_assignments[num_heads_name]))
-            best_struct_tuple.append(int(best_assignments['EMBED_DIM']))
-            self.best_struct = tuple(best_struct_tuple)
-        elif self.params.domain == "asr":
-            experiment = self.conn.experiments().create(
-                name= 'asr denas',
-                project='denas',
-                type="offline",
-                observation_budget=self.params.sigopt_max_epochs,
-                metrics=[dict(name='DeScore', objective='maximize')],
-                conditionals=[dict(name="DEPTH",values=["9","10","11","12"])],
-                parameters=[
-                    dict(name="MLP_RATIO_0", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_1", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_2", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_3", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_4", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_5", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_6", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_7", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_8", type="double", grid=[*self.search_space['mlp_ratio']]),
-                    dict(name="MLP_RATIO_9", type="double", grid=[*self.search_space['mlp_ratio']], conditions=dict(DEPTH=["12","11","10"])),
-                    dict(name="MLP_RATIO_10", type="double", grid=[*self.search_space['mlp_ratio']], conditions=dict(DEPTH=["12","11"])),
-                    dict(name="MLP_RATIO_11", type="double", grid=[*self.search_space['mlp_ratio']], conditions=dict(DEPTH=["12"])),
-                    dict(name="NUM_HEADS_0", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_1", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_2", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_3", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_4", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_5", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_6", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_7", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_8", type="int", grid=[*self.search_space['num_heads']]),
-                    dict(name="NUM_HEADS_9", type="int", grid=[*self.search_space['num_heads']], conditions=dict(DEPTH=["12","11","10"])),
-                    dict(name="NUM_HEADS_10", type="int", grid=[*self.search_space['num_heads']], conditions=dict(DEPTH=["12","11"])),
-                    dict(name="NUM_HEADS_11", type="int", grid=[*self.search_space['num_heads']], conditions=dict(DEPTH=["12"])),
-                    dict(name="EMBED_DIM", type="int", grid=[*self.search_space['embed_dim']]),
-                ],
-            )
-            for epoch in range(experiment.observation_budget):
-                suggestion = self._get_sigopt_suggestion(experiment)
-                cand_tuple = list()
-                depth = int(suggestion.assignments['DEPTH'])
-                cand_tuple.append(depth)
-                for i in range(depth):
-                    mlp_ratio_name = f"MLP_RATIO_{i}"
-                    cand_tuple.append(float(suggestion.assignments[mlp_ratio_name]))
-                for i in range(depth):
-                    num_heads_name = f"NUM_HEADS_{i}"
-                    cand_tuple.append(int(suggestion.assignments[num_heads_name]))
-                cand_tuple.append(int(suggestion.assignments['EMBED_DIM']))
-                cand = tuple(cand_tuple)
-                if not self.cand_islegal(cand):
-                    self._set_illegal_observation(experiment, suggestion.id)
-                    continue
-                nas_score, score, latency = self.cand_evaluate(cand)
-                self.logger.info('epoch = {} nas_score = {} cand = {}'.format(epoch, nas_score, cand))
-                self._set_sigopt_observation(experiment, suggestion.id, nas_score)
-            best_assignments = self.conn.experiments(experiment.id).best_assignments().fetch().data[0].assignments  
-            depth = int(best_assignments['DEPTH'])
-            best_struct_tuple = list()
-            best_struct_tuple.append(depth)
-            for i in range(depth):
-                mlp_ratio_name = f"MLP_RATIO_{i}"
-                best_struct_tuple.append(float(best_assignments[mlp_ratio_name]))
-            for i in range(depth):
-                num_heads_name = f"NUM_HEADS_{i}"
-                best_struct_tuple.append(int(best_assignments[num_heads_name]))
-            best_struct_tuple.append(int(best_assignments['EMBED_DIM']))
-            self.best_struct = tuple(best_struct_tuple)
-        elif self.params.domain == "hf":
-            experiment = self.conn.experiments().create(
-                name= 'hugging face denas',
-                project='denas',
-                type="offline",
-                observation_budget=self.params.sigopt_max_epochs,
-                metrics=[dict(name='DeScore', objective='maximize')],
-                parameters=[
-                    dict(name=k, type="int", bounds=dict(min=0, max=len(self.search_space[k])-1)) for k in self.search_space
-                ],
-            )
-            for epoch in range(experiment.observation_budget):
-                suggestion = self._get_sigopt_suggestion(experiment)
-                cand = dict()
-                for k in suggestion.assignments:
-                    cand[k] = self.search_space[k][0]+suggestion.assignments[k]*int((self.search_space[k][-1]-self.search_space[k][0])/(len(self.search_space[k])-1))
-                cand["hidden_size"] = int(cand["hidden_size"]/cand["num_attention_heads"]) * cand["num_attention_heads"]
-                cand = json.dumps(cand)
-                if not self.cand_islegal(cand):
-                    self._set_illegal_observation(experiment, suggestion.id)
-                    continue
-                if not self.cand_islegal_latency(cand):
-                    self._set_illegal_observation(experiment, suggestion.id)
-                    continue
-                nas_score, score, latency = self.cand_evaluate(cand)
-                self.logger.info('epoch = {} structure = {} nas_score = {} params = {}'.format(epoch, cand, self.vis_dict[cand]['score'], self.vis_dict[cand]['params']))
-                self._set_sigopt_observation(experiment, suggestion.id, nas_score)
-            best_assignments = self.conn.experiments(experiment.id).best_assignments().fetch().data[0].assignments
-            self.best_struct = dict()
-            for k in best_assignments:
-                self.best_struct[k] = self.search_space[k][0]+best_assignments[k]*int((self.search_space[k][-1]-self.search_space[k][0])/(len(self.search_space[k])-1))
-            self.best_struct["hidden_size"] = int(self.best_struct["hidden_size"]/self.best_struct["num_attention_heads"]) * self.best_struct["num_attention_heads"]
-            self.best_struct = json.dumps(self.best_struct)
-        else:
-            raise RuntimeError(f"Domain {self.params.domain} is not supported")
-        with open("best_model_structure.txt", 'w') as f:
-            f.write(str(self.best_struct))
+        experiment = self.conn.experiments().create(
+            name= 'delta tuner',
+            project='delta tuner nas',
+            type="offline",
+            observation_budget=self.params.max_epochs,
+            metrics=[dict(name='DeScore', objective='maximize')],
+            parameters=[
+                dict(name=k, type="int", bounds=dict(min=0, max=len(self.search_space[k])-1)) for k in self.search_space
+            ],
+        )
+        for epoch in range(experiment.observation_budget):
+            suggestion = self._get_sigopt_suggestion(experiment)
+            cand = dict()
+            for name in self.params.search_space_name:
+                cand[name] = []
+            for i in range(getattr(self.supernet.config, self.params.layer_name)):
+                for name in self.params.search_space_name:
+                    cand[name][i] = self.search_space[f"{name}_{i}"][0]+suggestion.assignments[f"{name}_{i}"]*int((self.search_space[f"{name}_{i}"][-1]-self.search_space[f"{name}_{i}"][0])/(len(self.search_space[f"{name}_{i}"])-1))
+            cand = json.dumps(cand)
+            if not self.cand_islegal(cand):
+                self._set_illegal_observation(experiment, suggestion.id)
+                continue
+            if not self.cand_islegal_latency(cand):
+                self._set_illegal_observation(experiment, suggestion.id)
+                continue
+            nas_score, score, latency = self.cand_evaluate(cand)
+            self.logger.info('epoch = {} structure = {} nas_score = {} params = {}'.format(epoch, cand, self.vis_dict[cand]['score'], self.vis_dict[cand]['params']))
+            self._set_sigopt_observation(experiment, suggestion.id, nas_score)
+        best_assignments = self.conn.experiments(experiment.id).best_assignments().fetch().data[0].assignments
+        self.best_struct = dict()
+        for name in self.params.search_space_name:
+            self.best_struct[name] = []
+        for i in range(getattr(self.supernet.config, self.params.layer_name)):
+            for name in self.params.search_space_name:
+                self.best_struct[name][i] = self.search_space[f"{name}_{i}"][0]+best_assignments[f"{name}_{i}"]*int((self.search_space[f"{name}_{i}"][-1]-self.search_space[f"{name}_{i}"][0])/(len(self.search_space[f"{name}_{i}"])-1))
+        self.best_struct = json.dumps(self.best_struct)
+   
+        return str(self.best_struct)
 
     '''
     Unified API to get best searched structure
