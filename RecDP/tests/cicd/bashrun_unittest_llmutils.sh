@@ -4,52 +4,40 @@ failed_tests=""
 echo "Setup pyrecdp latest package"
 python setup.py sdist && pip install dist/pyrecdp-*.*.*.tar.gz
 
-echo "test_llmutils.Test_LLMUtils.test_near_dedup"
-python -m unittest tests.test_llmutils.Test_LLMUtils.test_near_dedup
+# call cmdline tests
+cmdline="python pyrecdp/primitives/llmutils/quality_classifier.py --dataset_path tests/data/llm_data/arxiv_sample_100.jsonl --result_path tests/data/output/qualify_classify"
+echo "***************"
+echo $cmdline
+echo "***************"
+${cmdline}
 if [ $? != 0 ]; then
-    failed_tests=${failed_tests}"tests.test_llmutils.Test_LLMUtils.test_near_dedup\n"
+    failed_tests=${failed_tests}${cmdline}"\n"
 fi
 
-echo "test_llmutils.Test_LLMUtils.test_near_dedup_spark"
-python -m unittest tests.test_llmutils.Test_LLMUtils.test_near_dedup_spark
+cmdline="python pyrecdp/primitives/llmutils/global_dedup.py -d tests/data/PILE/ -o tests/data/PILE_global_dedup -t jsonl"
+echo "***************"
+echo $cmdline
+echo "***************"
+${cmdline}
 if [ $? != 0 ]; then
-    failed_tests=${failed_tests}"tests.test_llmutils.Test_LLMUtils.test_near_dedup_spark\n"
+    failed_tests=${failed_tests}${cmdline}"\n"
 fi
 
-echo "test_llmutils.Test_LLMUtils.test_shrink_jsonl"
-python -m unittest tests.test_llmutils.Test_LLMUtils.test_shrink_jsonl
+cmdline="python pyrecdp/primitives/llmutils/near_dedup.py -d tests/data/PILE/ -o tests/data/PILE_near_dedup -t jsonl"
+echo "***************"
+echo $cmdline
+echo "***************"
+${cmdline}
 if [ $? != 0 ]; then
-    failed_tests=${failed_tests}"tests.test_llmutils.Test_LLMUtils.test_shrink_jsonl\n"
+    failed_tests=${failed_tests}${cmdline}"\n"
 fi
 
-echo "test_llmutils.Test_LLMUtils.test_text_to_jsonl"
-python -m unittest tests.test_llmutils.Test_LLMUtils.test_text_to_jsonl
-if [ $? != 0 ]; then
-    failed_tests=${failed_tests}"tests.test_llmutils.Test_LLMUtils.test_text_to_jsonl\n"
-fi
-
-echo "test_llmutils.Test_LLMUtils.test_filter_jsonl"
-python -m unittest tests.test_llmutils.Test_LLMUtils.test_filter_jsonl
-if [ $? != 0 ]; then
-    failed_tests=${failed_tests}"tests.test_llmutils.Test_LLMUtils.test_filter_jsonl\n"
-fi
-
-echo "test_llmutils.Test_LLMUtils.test_ppi_remove"
-python -m unittest tests.test_llmutils.Test_LLMUtils.test_ppi_remove
-if [ $? != 0 ]; then
-    failed_tests=${failed_tests}"tests.test_llmutils.Test_LLMUtils.test_ppi_remove\n"
-fi
-
-echo "test_llmutils.Test_LLMUtils.test_language_identify"
-python -m unittest tests.test_llmutils.Test_LLMUtils.test_language_identify
-if [ $? != 0 ]; then
-    failed_tests=${failed_tests}"tests.test_llmutils.Test_LLMUtils.test_language_identify\n"
-fi
+python -m unittest tests.test_llmutils.Test_LLMUtils
 
 if [ -z ${failed_tests} ]; then
     echo "All tests are passed"
 else
     echo "*** Failed Tests are: ***"
-    echo ${failed_tests}
+    echo -e ${failed_tests}
     exit 1
 fi

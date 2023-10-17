@@ -1,33 +1,59 @@
 import argparse
-import os
 from pyrecdp.core.utils import Timer
-import json
-from .utils import get_nchunks_and_nproc, launch_mp
 
-## Place Holder, not done yet
-# define actual work
-def classify(x_list, classify_condition):
-    raise NotImplementedError("This function is not completed yet, just place holder")
-    for x in x_list:
-        in_file_name, out_file_name = x
-        with open(in_file_name, 'r') as rdr:
-            with open(out_file_name, 'w') as f:
-                for idx, line in enumerate(rdr):
-                    if classify_condition(idx):
-                        f.write(line + "\n")
-    return True
 
-# define how to do parallel here
-def classify_MP(data_dir, classify_condition, out_dir):
-    os.makedirs(out_dir, exist_ok=True)
+def classify(dataset_path, result_path, read_data_file_type, write_data_file_type, classify_column):
+    from pyrecdp.LLM import TextPipeline
+    from pyrecdp.primitives.operations import JsonlReader, ParquetReader, ClassifyParquetWriter, ClassifyJsonlWriter
 
-    files = sorted(os.listdir(data_dir))
-    files = list(filter(lambda file_: '.jsonl' in file_, files))
-    
-    args = [(os.path.join(data_dir, i), os.path.join(out_dir, i)) for i in files]
+    pipeline = TextPipeline()
+    if read_data_file_type == 'jsonl':
+        reader = JsonlReader(dataset_path)
+    elif read_data_file_type == 'parquet':
+        reader = ParquetReader(dataset_path)
+    else:
+        raise NotImplementedError(f"{read_data_file_type} is not supported in RecDP LLM ResumableTextPipeline yet.")
 
-    n_chunks, n_proc = get_nchunks_and_nproc(len(files))
-    print(f"resetting to {n_proc} for number of processes")
-    
-    args = [(args[i : i + n_chunks], classify_condition) for i in range(0, len(args), n_chunks)]
-    launch_mp(n_proc, args, classify)
+    if write_data_file_type == 'jsonl':
+        writer = ClassifyParquetWriter(result_path, classify_column)
+    elif write_data_file_type == 'parquet':
+        writer = ClassifyJsonlWriter(result_path, classify_column)
+    else:
+        raise NotImplementedError(f"{write_data_file_type} is not supported in RecDP LLM ResumableTextPipeline yet.")
+    ops = [
+        reader,
+        writer
+    ]
+    pipeline.add_operations(ops)
+    pipeline.execute()
+
+
+def classify_spark(spark_df, classify_column, write_data_file_type, result_path):
+    from pyrecdp.primitives.operations import ClassifyParquetWriter, ClassifyJsonlWriter
+    if write_data_file_type == 'jsonl':
+        op = ClassifyParquetWriter(result_path, classify_column)
+    elif write_data_file_type == 'parquet':
+        op = ClassifyJsonlWriter(result_path, classify_column)
+    else:
+        raise NotImplementedError(f"{write_data_file_type} is not supported in RecDP LLM ResumableTextPipeline yet.")
+    pred = op.process_spark(spark_df.sparkSession, spark_df)
+    return pred
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset_path", dest="dataset_path", type=str)
+    parser.add_argument("--result_path", dest="result_path", type=str)
+    parser.add_argument("--read_data_file_type", dest="read_data_file_type", type=str)
+    parser.add_argument("--write_data_file_type", dest="write_data_file_type", type=str)
+    parser.add_argument("--classify_column", dest="classify_column", type=str)
+
+    args = parser.parse_args()
+    dataset_path = args.dataset_path
+    result_path = args.result_path
+    read_data_file_type = args.read_data_file_type
+    write_data_file_type = args.write_data_file_type
+    classify_column = args.classify_column
+
+    with Timer(f"Classify data for {dataset_path}"):
+        classify(dataset_path, result_path, read_data_file_type, write_data_file_type, classify_column)
