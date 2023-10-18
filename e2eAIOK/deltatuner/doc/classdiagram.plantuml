@@ -1,0 +1,73 @@
+@startuml
+interface deltatuner {
+    optimize(model, tokenizer, algo, adapter_name, deltatuning_args) -> DeltatunerModel 
+}
+
+class DeltatunerModel {
+    _init_denas_params_()
+    search()
+    save_pretrained()
+    from_pretrained()
+    load_adapter()
+}
+
+class DeltatunerModelForCausalLM {
+    forward()
+    generate()
+    prepare_inputs_for_generation()
+}
+
+abstract class BaseSearchEngine {
+    search()
+    get_best_model_structures()
+    cand_is_legal()
+    cand_is_legal_latency()
+    get_latency()
+    populate_random_func()
+    cand_evaluate()
+}
+
+class EvolutionarySearchEngine {
+    stack_random_cand()
+    mutation_random_func()
+    crossover_random_func()
+    get_populate()
+    get_mutation()
+    get_crossover()
+    update_population_pool()
+    search()
+    get_best_model_structures()
+}
+
+class DeltaLoraModel {
+    _create_org_module()
+    _replace_module()
+    set_sample_config()
+}
+
+class DeltaSSFModel{
+    add_adapter()
+    _check_target_module_exists()
+    _create_new_module()
+    _find_and_replace()
+    _replace_module()
+    _create_org_module()
+    set_sample_config()
+    merge_adapter()
+    unmerge_adapter()
+    __getattr__()
+    get_peft_config_as_dict()
+    _prepare_ssf_config()
+    _unload_and_optionally_merge()
+    merge_and_unload()
+    unload()
+}
+
+deltatuner .. DeltatunerModel
+DeltatunerModel <|-- DeltatunerModelForCausalLM
+DeltatunerModel o-- DeltaLoraModel
+DeltatunerModel o-- DeltaSSFModel
+DeltatunerModel o-- BaseSearchEngine
+BaseSearchEngine <|-- EvolutionarySearchEngine
+
+@enduml
